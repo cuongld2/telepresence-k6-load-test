@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"donaldle.com/m/config"
@@ -152,23 +153,41 @@ func UpdateBlog(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 func DeleteBlog(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
 	blogID := ps.ByName("id")
-	row := config.DB.QueryRow("SELECT * FROM blog WHERE id = $1", blogID)
+
+	rows, err := config.DB.Query("SELECT * FROM blog")
+	// row := config.DB.QueryRow("SELECT * FROM blog WHERE id = $1", blogID)
 	// Create blog object
-	deletingBlog := Blog{}
-	er := row.Scan(&deletingBlog.ID,
-		&deletingBlog.Body, &deletingBlog.CreatedAt, &deletingBlog.UpdatedAt)
-	switch {
-	case er == sql.ErrNoRows:
-		http.NotFound(w, r)
+	if err != nil {
+		fmt.Println(err)
 		return
-	case er != nil:
-		http.Error(w, http.StatusText(500), http.StatusInternalServerError)
-		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		checkedBlog := Blog{}
+		err := rows.Scan(&checkedBlog.ID,
+			&checkedBlog.Body, &checkedBlog.CreatedAt, &checkedBlog.UpdatedAt)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		blogIdInt, err := strconv.Atoi(blogID)
+
+		if err != nil {
+			fmt.Println("Error during conversion")
+			return
+		}
+
+		if checkedBlog.ID != blogIdInt {
+
+			_, err = config.DB.Exec("DELETE FROM blog WHERE id = $1", checkedBlog.ID)
+			if err != nil {
+				http.Error(w, http.StatusText(500), http.StatusInternalServerError)
+				return
+			}
+		}
+
 	}
 
-	_, err := config.DB.Exec("DELETE FROM blog WHERE id = $1", deletingBlog.ID)
-	if err != nil {
-		http.Error(w, http.StatusText(500), http.StatusInternalServerError)
-		return
-	}
 }
