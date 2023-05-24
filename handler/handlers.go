@@ -24,6 +24,10 @@ type CreatingBlog struct {
 	Body string `json:"body"`
 }
 
+type CreatingBlogId struct {
+	Id int `json:"id"`
+}
+
 func AllBlogs(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// We only accept 'GET' method here
 	if r.Method != "GET" {
@@ -76,10 +80,20 @@ func CreateBlog(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		return
 	}
 
-	_, err = config.DB.Exec("INSERT INTO blog (BODY) VALUES ($1)", blog.Body)
+	lastInsertedId := 0
+	err = config.DB.QueryRow("INSERT INTO blog (BODY) VALUES ($1) RETURNING id", blog.Body).Scan(&lastInsertedId)
 	if err != nil {
 		http.Error(w, http.StatusText(500), http.StatusInternalServerError)
 		return
+	}
+
+	blogCreatedId := CreatingBlogId{}
+	blogCreatedId.Id = lastInsertedId
+
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(blogCreatedId); err != nil {
+		panic(err)
 	}
 }
 
